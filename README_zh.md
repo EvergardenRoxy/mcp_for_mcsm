@@ -2,7 +2,7 @@
 
 [English](README.md) | **中文**
 
-[![AI Assisted](https://img.shields.io/badge/AI-Claude%20Opus%205.5%20%2B%20Claude%20Code-D97757?style=for-the-badge&logo=anthropic&logoColor=white)](#ai-制作声明) [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE) [![Node](https://img.shields.io/badge/Node.js-%E2%89%A518-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](#安装)
+[![AI Assisted](https://img.shields.io/badge/AI-Claude%20Opus%205.5%20%2B%20Claude%20Code-D97757?style=for-the-badge&logo=anthropic&logoColor=white)](#ai-制作声明) [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE) [![Node](https://img.shields.io/badge/Node.js-%E2%89%A518-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](#安装配置教程)
 
 一个 **MCSManager V10** 用的最小权限 MCP 服务端（stdio），可接入任何支持 MCP 的客户端。AI 助手可以用它查看实例状态、读日志和文件；开启相应开关后，也能发命令、启停实例。API Key 和面板地址分开存放，Key 不会出现在客户端配置或任何输出里。
 
@@ -20,55 +20,105 @@
 > [!WARNING]
 > 命令黑名单可以绕过，不是安全边界（[S4](checklist.md#s4)）；游戏内聊天和日志可能对模型进行提示注入（[S3](checklist.md#s3)）；`read_file` 会把配置文件里的密码原样交给模型（[S5](checklist.md#s5)）。真正的边界是面板账号的权限。
 
-## 安装
+## 安装配置教程
 
-需要 Node.js ≥ 18。
+共六步：准备面板 → 安装 → 写 `config.json` → 保存密钥 → 接入客户端 → 验证。每一步都分 Linux（macOS 相同）和 Windows 两种写法。
 
-```bash
-git clone https://github.com/EvergardenRoxy/mcp_for_mcsm.git mcsm-mcp-secure
-cd mcsm-mcp-secure
-npm install
-npm test   # 可选：端到端测试（Windows 上会跳过文件权限相关测试）
-```
+### 第 1 步：在面板上准备
 
-## 配置
-
-**Linux / macOS**
-
-```bash
-mkdir -p ~/.config/mcsm-mcp && chmod 700 ~/.config/mcsm-mcp
-cp config.example.json ~/.config/mcsm-mcp/config.json && chmod 600 ~/.config/mcsm-mcp/config.json
-# 密钥：用 read -s 输入，不进 shell 历史
-read -rs MCSM_KEY && printf '%s' "$MCSM_KEY" > ~/.config/mcsm-mcp/api-key && unset MCSM_KEY
-chmod 600 ~/.config/mcsm-mcp/api-key
-```
-
-**Windows（PowerShell）**：不要用 `>` 或 `Out-File` 写密钥，PowerShell 5.1 会写成 UTF-16。
-
-```powershell
-$dir = "$HOME\.config\mcsm-mcp"; New-Item -ItemType Directory -Force $dir | Out-Null
-Copy-Item config.example.json "$dir\config.json"
-$k = Read-Host "API Key" -AsSecureString
-[IO.File]::WriteAllText("$dir\api-key", [Net.NetworkCredential]::new('', $k).Password); Remove-Variable k
-icacls "$dir\api-key" /inheritance:r /grant:r "${env:USERNAME}:F"   # 只允许当前用户访问
-```
-
-`config.json` 的主要字段：
-
-| 字段 | 说明 |
-| --- | --- |
-| `base_url` | 面板地址，如 `https://panel.example.com`（可带子路径） |
-| `instances` | 别名 → `uuid` + `daemon_id`（面板实例页地址栏里的 `instanceId`、`daemonId`） |
-| `wildcard` | `enabled: true` 时自动发现所有实例（**需要管理员 Key**）；`allowed_daemons` 限定节点 |
-| `allow` | `read_files`（默认开）、`send_command`、`power`、`kill`（默认关） |
-| `blocked_command_prefixes` | 禁止的命令前缀，默认 `stop`、`op `、`deop `、`save-off` |
+1. **生成 API Key**：登录面板，点右上角用户菜单 →「个人资料」→ API 密钥一栏点「生成」。先不要关闭这个窗口，第 4 步要粘贴它。不要把它存进记事本或聊天里。
+2. **记下实例 ID**：打开实例的控制台页面，地址里有 `/instances/terminal?daemonId=…&instanceId=…`，把这两个值记下来。
+   如果使用通配模式（自动发现所有实例，但**需要管理员 Key**），可以跳过这一步。
 
 > [!CAUTION]
 > API Key 的权限与生成它的账号完全一致。请用**专用低权限账号**生成，只分配需要管理的实例。不要把 Key 贴进任何聊天。
 
-## 接入 MCP 客户端
+### 第 2 步：安装
 
-任何支持 stdio MCP 服务端的客户端都可以使用，需要三项：命令 `node`、参数 `server.mjs` 的绝对路径、环境变量 `MCSM_MCP_CONFIG`（指向 `config.json`）。客户端配置里没有密钥，也没有面板地址。
+需要 Node.js ≥ 18（用 `node -v` 查看）。
+
+**Linux**
+
+```bash
+# 如未安装 Node.js，请用发行版的包管理器或从 https://nodejs.org 安装
+git clone https://github.com/EvergardenRoxy/mcp_for_mcsm.git ~/mcsm-mcp-secure
+cd ~/mcsm-mcp-secure
+npm install
+npm test   # 可选：针对模拟面板的端到端测试
+```
+
+**Windows（PowerShell）**
+
+```powershell
+winget install OpenJS.NodeJS.LTS   # 如未安装 Node.js；装完重新打开 PowerShell
+git clone https://github.com/EvergardenRoxy/mcp_for_mcsm.git "$HOME\mcsm-mcp-secure"
+# 没有 git：在 GitHub 页面点「Code → Download ZIP」，解压到同一个文件夹
+cd "$HOME\mcsm-mcp-secure"
+npm.cmd install   # 用 npm.cmd：PowerShell 的执行策略可能会拦截 npm.ps1
+```
+
+### 第 3 步：创建 `config.json`
+
+配置放在项目文件夹之外，以后更新代码不会影响它。
+
+**Linux**
+
+```bash
+mkdir -p ~/.config/mcsm-mcp && chmod 700 ~/.config/mcsm-mcp
+cp ~/mcsm-mcp-secure/config.example.json ~/.config/mcsm-mcp/config.json
+chmod 600 ~/.config/mcsm-mcp/config.json
+nano ~/.config/mcsm-mcp/config.json
+```
+
+**Windows（PowerShell）**
+
+```powershell
+$dir = "$HOME\.config\mcsm-mcp"; New-Item -ItemType Directory -Force $dir | Out-Null
+Copy-Item "$HOME\mcsm-mcp-secure\config.example.json" "$dir\config.json"
+notepad "$dir\config.json"   # 保存为 UTF-8（带不带 BOM 都可以）
+```
+
+填入面板地址和第 1 步记下的 ID：
+
+```json
+{
+  "base_url": "https://panel.example.com",
+  "api_key_file": "api-key",
+  "default_instance": "survival",
+  "instances": {
+    "survival": { "uuid": "<instanceId>", "daemon_id": "<daemonId>", "description": "Survival server" }
+  },
+  "allow": { "read_files": true, "send_command": false, "power": false, "kill": false }
+}
+```
+
+使用通配模式时：把 `instances` 写成 `{}`，删掉 `default_instance`，再加上 `"wildcard": { "enabled": true }`。全部字段见[配置字段](#配置字段)。
+
+### 第 4 步：保存 API Key
+
+Key 单独存放在 `config.json` 同目录下名为 `api-key` 的文件里。下面的命令输入时不回显，也不会进入命令历史。
+
+**Linux**
+
+```bash
+read -rs MCSM_KEY && printf '%s' "$MCSM_KEY" > ~/.config/mcsm-mcp/api-key && unset MCSM_KEY
+chmod 600 ~/.config/mcsm-mcp/api-key
+```
+
+**Windows（PowerShell）**：不要用 `>` 或 `Out-File`，PowerShell 5.1 会写成 UTF-16。
+
+```powershell
+$dir = "$HOME\.config\mcsm-mcp"
+$k = Read-Host "API Key" -AsSecureString
+[IO.File]::WriteAllText("$dir\api-key", [Net.NetworkCredential]::new('', $k).Password); Remove-Variable k
+icacls "$dir\api-key" /inheritance:r /grant:r "${env:USERNAME}:F"   # 只允许当前用户读取
+```
+
+也可以不用文件，改用环境变量 `MCSM_API_KEY` 提供 Key。
+
+### 第 5 步：接入 MCP 客户端
+
+任何支持 stdio MCP 服务端的客户端都可以使用，需要三项：命令 `node`、`server.mjs` 的绝对路径、环境变量 `MCSM_MCP_CONFIG`（指向 `config.json`）。客户端配置里没有密钥，也没有面板地址。
 
 **`mcpServers` JSON 格式**（Claude Desktop 的 `claude_desktop_config.json` 等许多客户端采用这种格式，具体文件位置见各客户端文档）：
 
@@ -77,18 +127,64 @@ icacls "$dir\api-key" /inheritance:r /grant:r "${env:USERNAME}:F"   # 只允许�
   "mcpServers": {
     "mcsm": {
       "command": "node",
-      "args": ["/绝对路径/mcsm-mcp-secure/server.mjs"],
-      "env": { "MCSM_MCP_CONFIG": "/绝对路径/.config/mcsm-mcp/config.json" }
+      "args": ["/home/<你>/mcsm-mcp-secure/server.mjs"],
+      "env": { "MCSM_MCP_CONFIG": "/home/<你>/.config/mcsm-mcp/config.json" }
     }
   }
 }
 ```
 
+Windows 路径请用正斜杠（`C:/Users/<你>/mcsm-mcp-secure/server.mjs`）或双反斜杠（`C:\\Users\\...`）。单个 `\` 会让 JSON 无效。
+
 **命令行添加**（以 Claude Code 为例）：
 
 ```bash
-claude mcp add mcsm -e MCSM_MCP_CONFIG=$HOME/.config/mcsm-mcp/config.json -- node /绝对路径/mcsm-mcp-secure/server.mjs
+claude mcp add mcsm -e MCSM_MCP_CONFIG=$HOME/.config/mcsm-mcp/config.json -- node $HOME/mcsm-mcp-secure/server.mjs
 ```
+
+### 第 6 步：验证
+
+1. **先在终端里试运行**（可选，但能清楚看到启动错误）：
+   ```bash
+   # Linux
+   MCSM_MCP_CONFIG=~/.config/mcsm-mcp/config.json node ~/mcsm-mcp-secure/server.mjs
+   ```
+   ```powershell
+   # Windows
+   $env:MCSM_MCP_CONFIG = "$HOME\.config\mcsm-mcp\config.json"; node "$HOME\mcsm-mcp-secure\server.mjs"
+   ```
+   看到以 `[mcsm-mcp] 就绪` 开头的一行，说明配置正确。按 `Ctrl+C` 退出。
+2. **完全重启 MCP 客户端**（Windows / macOS 上要从托盘或菜单栏退出），然后让 AI 助手调用 `list_instances` 和 `get_instance_info`。
+
+**常见报错**：
+
+| 报错 | 原因 / 解决 |
+| --- | --- |
+| `找不到配置文件` | `MCSM_MCP_CONFIG` 路径不对 |
+| `权限过宽` | Linux/macOS：对报错里的文件执行 `chmod 600` |
+| `配置文件不是合法 JSON` | 少了逗号或引号，或者 Windows 路径用了单个反斜杠 |
+| `配置无效` | 字段名写错或多了未知字段，对照 `config.example.json` |
+| `找不到密钥文件` | `config.json` 所在目录里没有 `api-key` |
+| `非本机地址必须使用 https` | 改用 https 面板地址（见[公网面板建议](#公网面板建议)） |
+| `无法连接面板` | 面板不可达、端口错误，或面板返回了重定向（程序故意不跟随） |
+| `面板返回了非 JSON 内容` | `base_url` 没有指向 MCSManager 面板 |
+| `面板返回 status=403` | Key 错误，或账号没有该实例 / 管理员接口的权限 |
+
+## 配置字段
+
+| 字段 | 说明 |
+| --- | --- |
+| `base_url` | 面板地址，如 `https://panel.example.com`（可带子路径） |
+| `api_key_file` | 密钥文件名，相对于 `config.json` 所在目录（默认 `api-key`） |
+| `default_instance` | 工具调用没有指定 `instance` 时使用的别名 |
+| `instances` | 别名 → `uuid` + `daemon_id`（可选 `description`） |
+| `wildcard` | `enabled: true` 时自动发现所有实例（**需要管理员 Key**）；`allowed_daemons` 限定节点 UUID |
+| `allow` | `read_files`（默认开）、`send_command`、`power`、`kill`（默认关） |
+| `blocked_command_prefixes` | 禁止的命令前缀，默认 `stop`、`op `、`deop `、`save-off` |
+| `rate_limit_per_minute` | 每分钟请求上限（默认 60） |
+| `max_output_chars` | 每次工具调用最多返回的字符数（默认 8000） |
+| `request_timeout_ms` | 面板请求超时（默认 20000） |
+| `allow_insecure_http` | 允许对非本机地址使用明文 http（不推荐） |
 
 ## 工具
 

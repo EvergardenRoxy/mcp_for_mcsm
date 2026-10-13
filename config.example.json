@@ -6,7 +6,7 @@
     "survival": {
       "uuid": "REPLACE_WITH_INSTANCE_UUID",
       "daemon_id": "REPLACE_WITH_DAEMON_ID",
-      "description": "生存服"
+      "description": "Survival server"
     }
   },
   "wildcard": {
