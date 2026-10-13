@@ -43,7 +43,7 @@ Requires Node.js ≥ 18 (check with `node -v`).
 
 ```bash
 # Install Node.js from your package manager or https://nodejs.org if needed
-git clone https://github.com/EvergardenRoxy/mcp_for_mcsm.git ~/mcsm-mcp-secure
+git clone https://github.com/EvergardenRoxy/mcsm-mcp-secure.git ~/mcsm-mcp-secure
 cd ~/mcsm-mcp-secure
 npm install
 npm test   # optional: end-to-end tests against a mock panel
@@ -53,7 +53,7 @@ npm test   # optional: end-to-end tests against a mock panel
 
 ```powershell
 winget install OpenJS.NodeJS.LTS   # if Node.js is not installed; reopen PowerShell afterwards
-git clone https://github.com/EvergardenRoxy/mcp_for_mcsm.git "$HOME\mcsm-mcp-secure"
+git clone https://github.com/EvergardenRoxy/mcsm-mcp-secure.git "$HOME\mcsm-mcp-secure"
 # No git? Use "Code → Download ZIP" on GitHub and unzip it to the same folder.
 cd "$HOME\mcsm-mcp-secure"
 npm.cmd install   # use npm.cmd: PowerShell may block npm.ps1 by execution policy

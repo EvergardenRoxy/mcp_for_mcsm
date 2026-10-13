@@ -41,7 +41,7 @@
 
 ```bash
 # 如未安装 Node.js，请用发行版的包管理器或从 https://nodejs.org 安装
-git clone https://github.com/EvergardenRoxy/mcp_for_mcsm.git ~/mcsm-mcp-secure
+git clone https://github.com/EvergardenRoxy/mcsm-mcp-secure.git ~/mcsm-mcp-secure
 cd ~/mcsm-mcp-secure
 npm install
 npm test   # 可选：针对模拟面板的端到端测试
@@ -51,7 +51,7 @@ npm test   # 可选：针对模拟面板的端到端测试
 
 ```powershell
 winget install OpenJS.NodeJS.LTS   # 如未安装 Node.js；装完重新打开 PowerShell
-git clone https://github.com/EvergardenRoxy/mcp_for_mcsm.git "$HOME\mcsm-mcp-secure"
+git clone https://github.com/EvergardenRoxy/mcsm-mcp-secure.git "$HOME\mcsm-mcp-secure"
 # 没有 git：在 GitHub 页面点「Code → Download ZIP」，解压到同一个文件夹
 cd "$HOME\mcsm-mcp-secure"
 npm.cmd install   # 用 npm.cmd：PowerShell 的执行策略可能会拦截 npm.ps1
