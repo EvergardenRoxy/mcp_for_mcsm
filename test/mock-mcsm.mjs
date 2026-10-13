@@ -4,6 +4,21 @@
 // - records every request so tests can assert on headers/paths
 import http from 'node:http';
 
+// Host path of the instance directory; the daemon returns it in /api/files/list and it must never reach the model.
+export const ABS_PATH = '/opt/mcsmanager/daemon/data/InstanceData/abs-secret-dir';
+const FILES = {
+  '/': [
+    { name: 'logs', size: 0, type: 0 },
+    { name: 'world', size: 0, type: 0 },
+    { name: 'server.properties', size: 1200, type: 1 },
+    { name: 'user_jvm_args.txt', size: 300, type: 1 },
+  ],
+  '/logs': [
+    { name: 'debug.log', size: 9000, type: 1 },
+    { name: 'latest.log', size: 4096, type: 1 },
+  ],
+};
+
 export async function startMock({ key, uuid = 'inst-uuid', daemon = 'daemon-id' }) {
   const requests = [];
   let logText = '\u001b[32m[Server thread/INFO]\u001b[0m: Done (12.1s)! For help, type "help"\r\n';
@@ -70,11 +85,22 @@ export async function startMock({ key, uuid = 'inst-uuid', daemon = 'daemon-id' 
             { instanceUuid: 'inst-3-uuid', status: 0, config: { nickname: 'creative' }, info: {} },
           ] }));
         }
-        case '/api/files/list':
-          return res.end(env(200, { items: [
-            { name: 'world', size: 0, type: 0 },
-            { name: 'server.properties', size: 1200, type: 1 },
-          ], page: 0, pageSize: 50, total: 2 }));
+        case '/api/files/list': {
+          // Mirrors panel filemananger_router.ts + daemon system_file.ts list():
+          // the panel does String(ctx.query.file_name), so an omitted file_name becomes the
+          // literal "undefined" and the daemon filters by it -> empty list.
+          const fileName = String(q.get('file_name') ?? undefined);
+          const page = Math.max(0, Number(q.get('page')) || 0);
+          const pageSize = Math.min(100, Math.max(1, Number(q.get('page_size')) || 10));
+          const all = FILES[q.get('target')];
+          if (!all) return res.end(env(500, 'ENOENT: no such file or directory'));
+          const filtered = all.filter((f) => !fileName || f.name.toLowerCase().includes(fileName.toLowerCase()));
+          return res.end(env(200, {
+            items: filtered.slice(page * pageSize, page * pageSize + pageSize),
+            page, pageSize, total: filtered.length,
+            absolutePath: ABS_PATH + q.get('target'),
+          }));
+        }
         case '/api/files/': {
           if (req.method !== 'PUT') return res.end(env(400, 'method'));
           const target = JSON.parse(bodyText || '{}').target;

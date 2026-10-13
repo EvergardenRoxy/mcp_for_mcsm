@@ -323,7 +323,7 @@ function newOutput(before, after) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ----------------------------------------------------------------- server --
-const server = new McpServer({ name: 'mcsm-mcp-secure', version: '0.1.0' });
+const server = new McpServer({ name: 'mcsm-mcp-secure', version: '0.1.1' });
 const enabled = [];
 const READ = { readOnlyHint: true, openWorldHint: true };
 const instanceParam = z
@@ -405,22 +405,29 @@ if (CFG.allow.read_files) {
   tool(
     'list_files',
     '列出实例目录文件',
-    '列出实例目录下的文件和文件夹。',
+    '列出实例目录下的文件和文件夹（d=目录，f=文件；目录在前，按名称排序）。',
     {
       instance: instanceParam,
       path: z.string().default('/').describe('目录路径，以 / 开头'),
-      page: z.number().int().min(0).default(0),
+      filter: z.string().max(100).default('').describe('只显示名称包含该字符串的项（不区分大小写），留空显示全部'),
+      page: z.number().int().min(0).default(0).describe('页码，从 0 开始'),
       page_size: z.number().int().min(1).max(100).default(50),
     },
     READ,
-    async ({ instance, path: p = '/', page = 0, page_size = 50 }) => {
+    async ({ instance, path: p = '/', filter = '', page = 0, page_size = 50 }) => {
       const { ref } = await resolveInstance(instance);
-      const d = await api('GET', '/api/files/list', { query: { ...ref, target: safePath(p), page, page_size } });
-      const arr = Array.isArray(d) ? d : Array.isArray(d?.items) ? d.items : Array.isArray(d?.data) ? d.data : Array.isArray(d?.list) ? d.list : [];
-      const isDir = (i) => i.type === 0 || i.type === 'dir' || i.type === 'directory' || i.isDirectory === true;
-      const items = arr.map((i) => `${isDir(i) ? 'd' : 'f'} ${i.name}${!isDir(i) && i.size != null ? ` (${i.size} B)` : ''}`);
-      const hint = !items.length && d && typeof d === 'object' ? `\n[诊断] 响应字段: ${Object.keys(d).join(', ') || '(无)'}` : '';
-      return ok(limitText(`${items.join('\n') || '(空)'}\n— 第 ${d?.page ?? page} 页，共 ${d?.total ?? items.length} 项${hint}`));
+      // file_name must always be sent: the panel does String(ctx.query.file_name), so omitting it
+      // makes the daemon filter by the literal "undefined" and return an empty list.
+      const d = await api('GET', '/api/files/list', {
+        query: { ...ref, target: safePath(p), file_name: filter, page, page_size },
+      });
+      // Response: { items: [{ name, size, time, mode, type: 0=dir|1=file }], page, pageSize, total, absolutePath }.
+      // absolutePath is the host path of the instance directory and is deliberately not shown.
+      if (!Array.isArray(d?.items)) throw new McsmError('面板返回的文件列表格式无法识别');
+      const items = d.items.map((i) => (i.type === 0 ? `d ${i.name}` : `f ${i.name} (${i.size} B)`));
+      const total = Number(d.total) || 0;
+      const pages = Math.max(1, Math.ceil(total / page_size));
+      return ok(limitText(`${items.join('\n') || '(空)'}\n— 第 ${page} 页 / 共 ${pages} 页，共 ${total} 项`));
     },
   );
 

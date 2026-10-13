@@ -2,7 +2,7 @@
 
 给 MCSManager **V10** 用的最小权限 MCP 服务端。让 Claude 读日志、看状态、（可选）发命令和启停，同时把密钥和面板地址和 Claude 的配置隔离开。
 
-> ⚠️ 本项目只对照官方 API 文档、用严格模拟的 V10 服务器测试过（`npm test`，全部通过），**还没有连过真实面板**。第一次请先用只读模式（默认）试一遍。
+> 已在真实 V10 面板上验证：`discover_instances`、`get_instance_info`、`get_output_log`、`read_file`。`list_files` 的请求参数已按 MCSManager 源码（`panel/src/app/routers/filemananger_router.ts`、`daemon/src/service/system_file.ts`）修正。第一次请先用只读模式（默认）试一遍。
 
 ## 设计要点
 
@@ -79,7 +79,7 @@ claude mcp add mcsm -e MCSM_MCP_CONFIG=$HOME/.config/mcsm-mcp/config.json -- nod
 | `list_instances` | 是 | 列出可管理的实例别名 |
 | `get_instance_info` | 是 | 状态、资源占用、玩家数（不含启动命令） |
 | `get_output_log` | 是 | 终端输出最后 N 行，已去除颜色码 |
-| `list_files` / `read_file` | `allow.read_files`（默认开） | 只读浏览和读取实例文件，拒绝 `..` |
+| `list_files` / `read_file` | `allow.read_files`（默认开） | 只读浏览和读取实例文件，拒绝 `..`；`list_files` 支持 `filter` 按名称过滤、`page`（从 0 开始）分页 |
 | `send_command` | `allow.send_command` | 发送命令并返回新增输出 |
 | `start_instance` / `stop_instance` / `restart_instance` | `allow.power` | 启停重启 |
 | `kill_instance` | `allow.kill` | 强制终止 |

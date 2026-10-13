@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { startMock } from './mock-mcsm.mjs';
+import { startMock, ABS_PATH } from './mock-mcsm.mjs';
 
 const SERVER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'server.mjs');
 const KEY = 'k3y-SECRET-9f8a7b6c5d4e3f2a';
@@ -17,7 +17,7 @@ function check(name, cond, detail = '') {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${cond ? '' : '  <-- ' + detail}`);
   if (!cond) failures++;
 }
-const leakStrings = (mock) => [KEY, encodeURIComponent(KEY), mock.url, `127.0.0.1:${mock.port}`, '10.9.8.7'];
+const leakStrings = (mock) => [KEY, encodeURIComponent(KEY), mock.url, `127.0.0.1:${mock.port}`, '10.9.8.7', ABS_PATH];
 const txt = (r) => (r.content ?? []).map((c) => c.text).join('\n');
 
 const allOutputs = []; // every string the server ever gave us (tool results + stderr), for the leak sweep
@@ -93,6 +93,16 @@ try {
 
   const fl = txt(await A.call('list_files', { path: '/' }));
   check('list_files 正常', fl.includes('server.properties') && fl.includes('d world'), fl);
+  const listReq = mock.requests.filter((r) => r.path === '/api/files/list').pop();
+  check('list_files 显式发送空 file_name（否则面板会按 "undefined" 过滤）', listReq?.query.file_name === '', JSON.stringify(listReq?.query));
+  const fLogs = txt(await A.call('list_files', { path: '/logs' }));
+  check('list_files 子目录 /logs 正常', fLogs.includes('f latest.log (4096 B)'), fLogs);
+  const fFilter = txt(await A.call('list_files', { path: '/', filter: 'PROPERTIES' }));
+  check('list_files filter 按名称过滤（不区分大小写）', fFilter.includes('server.properties') && !fFilter.includes('world'), fFilter);
+  const fPage = txt(await A.call('list_files', { path: '/', page: 1, page_size: 2 }));
+  check('list_files 分页', fPage.includes('server.properties') && !fPage.includes('d logs') && fPage.includes('共 4 项'), fPage);
+  const fMissing = await A.call('list_files', { path: '/nope' });
+  check('list_files 不存在的目录返回错误', fMissing.isError === true, txt(fMissing));
 
   const rf = txt(await A.call('read_file', { path: '/server.properties' }));
   check('read_file 正常（PUT /api/files/）', rf.includes('motd=Hello'), rf);
