@@ -1,0 +1,26 @@
+{
+  "base_url": "https://panel.example.com",
+  "api_key_file": "api-key",
+  "default_instance": "survival",
+  "instances": {
+    "survival": {
+      "uuid": "REPLACE_WITH_INSTANCE_UUID",
+      "daemon_id": "REPLACE_WITH_DAEMON_ID",
+      "description": "生存服"
+    }
+  },
+  "wildcard": {
+    "enabled": false,
+    "allowed_daemons": []
+  },
+  "allow": {
+    "read_files": true,
+    "send_command": false,
+    "power": false,
+    "kill": false
+  },
+  "blocked_command_prefixes": ["stop", "op ", "deop ", "save-off"],
+  "rate_limit_per_minute": 60,
+  "max_output_chars": 8000,
+  "request_timeout_ms": 20000
+}

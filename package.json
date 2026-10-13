@@ -1,0 +1,22 @@
+{
+  "name": "mcsm-mcp-secure",
+  "version": "0.1.0",
+  "description": "Least-privilege MCP server for MCSManager (V10). Secrets live in separate 0600 files, never in the MCP client config.",
+  "type": "module",
+  "main": "server.mjs",
+  "bin": {
+    "mcsm-mcp-secure": "server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test/run-tests.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^3.25.76"
+  }
+}
