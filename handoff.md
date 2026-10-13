@@ -1,9 +1,9 @@
 # handoff.md — context for AI assistants
 
-Read this before changing the code. Human-facing status and risks: `checklist.md`. User docs: `README.md` (Chinese).
+Read this before changing the code. Human-facing status and risks: `checklist.md`. User docs: `README.md` (English) and `README_zh.md` (Chinese); keep the two in sync.
 
 ## 1. What this is
-- `mcsm-mcp-secure`: a single-file MCP stdio server (`server.mjs`, Node ≥18, ESM) that lets an MCP client (Claude Desktop / Claude Code) manage MCSManager **V10** instances through the panel HTTP API.
+- `mcsm-mcp-secure`: a single-file MCP stdio server (`server.mjs`, Node ≥18, ESM) that lets any MCP client supporting stdio servers (e.g. Claude Desktop, Claude Code, other `mcpServers`-style clients) manage MCSManager **V10** instances through the panel HTTP API.
 - Version: 0.2.0. Dependencies: `@modelcontextprotocol/sdk`, `zod` (v3). No build step.
 - Primary goal: least privilege + secret isolation. The API key must never reach the MCP client config, tool output, errors, stderr, or `audit.log`.
 

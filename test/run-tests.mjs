@@ -1,4 +1,4 @@
-// End-to-end tests: spawns server.mjs over stdio (like Claude Desktop would) against a strict V10 mock.
+// End-to-end tests: spawns server.mjs over stdio (like an MCP client would) against a strict V10 mock.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
