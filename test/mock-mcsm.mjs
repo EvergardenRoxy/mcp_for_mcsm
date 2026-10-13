@@ -6,6 +6,13 @@ import http from 'node:http';
 
 // Host path of the instance directory; the daemon returns it in /api/files/list and it must never reach the model.
 export const ABS_PATH = '/opt/mcsmanager/daemon/data/InstanceData/abs-secret-dir';
+// Contents returned by PUT /api/files/ (the daemon decodes every file as UTF-8, so binary turns into NUL/U+FFFD noise).
+const TEXT_FILES = {
+  '/server.properties': 'motd=Hello\nmax-players=20\n',
+  '/logs/latest.log': Array.from({ length: 500 }, (_, i) => `[INFO] L${String(i + 1).padStart(4, '0')}`).join('\n'),
+  '/disguised.txt': 'PK\u0003\u0004\u0000\u0000' + '\uFFFD\u0000'.repeat(200) + 'tail',
+  '/logs/2026-09-13-1.log.gz': '\uFFFD'.repeat(100),
+};
 const FILES = {
   '/': [
     { name: 'logs', size: 0, type: 0 },
@@ -104,7 +111,7 @@ export async function startMock({ key, uuid = 'inst-uuid', daemon = 'daemon-id' 
         case '/api/files/': {
           if (req.method !== 'PUT') return res.end(env(400, 'method'));
           const target = JSON.parse(bodyText || '{}').target;
-          if (target === '/server.properties') return res.end(env(200, 'motd=Hello\nmax-players=20\n'));
+          if (target in TEXT_FILES) return res.end(env(200, TEXT_FILES[target]));
           return res.end(env(500, 'File not found'));
         }
         default:

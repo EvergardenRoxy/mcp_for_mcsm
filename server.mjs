@@ -212,8 +212,9 @@ async function api(method, endpoint, { query = {}, body } = {}) {
 // ---------------------------------------------------------------- helpers --
 const ANSI = /\x1B\[[0-?]*[ -/]*[@-~]/g;
 const clean = (s) => String(s ?? '').replace(ANSI, '').replace(/\r\n?/g, '\n');
-function limitText(s) {
+function limitText(s, keep = 'tail') {
   if (s.length <= CFG.max_output_chars) return s;
+  if (keep === 'head') return s.slice(0, CFG.max_output_chars) + `\n…（已截断，仅显示开头 ${CFG.max_output_chars} 字符）`;
   return `…（已截断，仅显示末尾 ${CFG.max_output_chars} 字符）\n` + s.slice(-CFG.max_output_chars);
 }
 const ok = (t) => ({ content: [{ type: 'text', text: redact(t) }] });
@@ -300,6 +301,8 @@ async function resolveInstance(alias) {
   throw new McsmError(`未知实例 "${name}"，可选: ${names.join(', ')}`);
 }
 
+const BINARY_EXT = /\.(gz|zip|jar|7z|rar|tar|xz|bz2|png|jpe?g|gif|webp|ico|dat|dat_old|mca|mcr|nbt|schem|schematic|litematic|class|db|sqlite|exe|dll|so|dylib)$/i;
+
 function safePath(p) {
   const s = String(p ?? '/');
   if (s.includes('\0') || s.split(/[\\/]+/).includes('..')) throw new McsmError('路径不能包含 ".."');
@@ -323,7 +326,7 @@ function newOutput(before, after) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ----------------------------------------------------------------- server --
-const server = new McpServer({ name: 'mcsm-mcp-secure', version: '0.1.1' });
+const server = new McpServer({ name: 'mcsm-mcp-secure', version: '0.2.0' });
 const enabled = [];
 const READ = { readOnlyHint: true, openWorldHint: true };
 const instanceParam = z
@@ -434,13 +437,32 @@ if (CFG.allow.read_files) {
   tool(
     'read_file',
     '读取实例内的文本文件',
-    '读取实例目录内的文本文件（只读），如 server.properties、logs/latest.log、crash-reports/*.txt。',
-    { instance: instanceParam, path: z.string().describe('文件路径，如 /server.properties') },
+    '读取实例目录内的文本文件（只读），如 server.properties、logs/latest.log、crash-reports/*.txt。' +
+      '压缩包、jar、图片、存档等二进制文件会被拒绝。面板每次都传输整个文件（守护进程上限 5MB），lines/from 只决定返回哪一部分。',
+    {
+      instance: instanceParam,
+      path: z.string().describe('文件路径，如 /server.properties'),
+      lines: z.number().int().min(1).max(5000).default(200).describe('最多返回多少行'),
+      from: z.enum(['tail', 'head']).default('tail').describe('tail=返回末尾若干行（适合日志），head=返回开头若干行'),
+    },
     READ,
-    async ({ instance, path: p }) => {
+    async ({ instance, path: p, lines = 200, from = 'tail' }) => {
+      const target = safePath(p);
+      if (BINARY_EXT.test(target)) {
+        const hint = /\.log\.gz$/i.test(target) ? '历史日志是压缩包，请改读 /logs/latest.log 或 /crash-reports/ 下的文本报告。' : '';
+        throw new McsmError(`"${target}" 是二进制或压缩文件，无法以文本读取。${hint}`);
+      }
       const { ref } = await resolveInstance(instance);
-      const data = await api('PUT', '/api/files/', { query: ref, body: { target: safePath(p) } });
-      return ok(limitText(clean(typeof data === 'string' ? data : JSON.stringify(data))));
+      const data = await api('PUT', '/api/files/', { query: ref, body: { target } });
+      const text = clean(typeof data === 'string' ? data : JSON.stringify(data));
+      // The daemon decodes files as UTF-8: binary content shows up as NULs and U+FFFD replacement chars.
+      const bad = (text.match(/[\0\uFFFD]/g) ?? []).length;
+      if (bad > Math.max(8, text.length * 0.01)) throw new McsmError(`"${target}" 看起来是二进制文件，无法以文本读取`);
+      const all = text.split('\n');
+      if (all.length <= lines) return ok(limitText(text, from));
+      const part = from === 'head' ? all.slice(0, lines) : all.slice(-lines);
+      const note = `[共 ${all.length} 行，显示${from === 'head' ? '开头' : '末尾'} ${lines} 行]`;
+      return ok(limitText(from === 'head' ? `${note}\n${part.join('\n')}` : `${part.join('\n')}\n${note}`, from));
     },
   );
 }

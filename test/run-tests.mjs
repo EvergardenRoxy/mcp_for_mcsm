@@ -71,6 +71,10 @@ function expectStartupFailure(name, cfgPath, expect, env = {}) {
   check(`  └ 报错信息不含密钥: ${name}`, !r.stderr.includes(KEY) && !r.stdout.includes(KEY));
 }
 
+// POSIX file modes don't exist on Windows (the server skips the check there), so those assertions are skipped.
+const POSIX = process.platform !== 'win32';
+if (!POSIX) console.log('Windows：跳过文件权限（chmod 600）相关测试');
+
 const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'mcsm-test-'));
 const mock = await startMock({ key: KEY });
 
@@ -106,6 +110,19 @@ try {
 
   const rf = txt(await A.call('read_file', { path: '/server.properties' }));
   check('read_file 正常（PUT /api/files/）', rf.includes('motd=Hello'), rf);
+
+  const nFiles = mock.requests.length;
+  const gz = await A.call('read_file', { path: '/logs/2026-09-13-1.log.gz' });
+  check('read_file 按扩展名拒绝 .log.gz 并提示改读 latest.log', gz.isError === true && txt(gz).includes('latest.log'), txt(gz));
+  const jar = await A.call('read_file', { path: '/mods/Some-Mod.JAR' });
+  check('read_file 扩展名判断不区分大小写（.JAR）', jar.isError === true && txt(jar).includes('二进制'), txt(jar));
+  check('被扩展名拒绝的文件不会发请求', mock.requests.length === nFiles);
+  const dis = await A.call('read_file', { path: '/disguised.txt' });
+  check('read_file 拒绝伪装成 .txt 的二进制内容', dis.isError === true && txt(dis).includes('二进制'), txt(dis));
+  const tail = txt(await A.call('read_file', { path: '/logs/latest.log' }));
+  check('read_file 默认返回末尾 200 行并注明总行数', tail.includes('L0500') && tail.includes('L0301') && !tail.includes('L0300') && tail.includes('共 500 行'), tail.slice(0, 200));
+  const head = txt(await A.call('read_file', { path: '/logs/latest.log', from: 'head', lines: 3 }));
+  check('read_file from=head 返回开头若干行', head.includes('L0001') && head.includes('L0003') && !head.includes('L0004'), head);
 
   const trav = await A.call('read_file', { path: '/../etc/passwd' });
   check('read_file 拒绝 ".." 路径穿越', trav.isError === true && txt(trav).includes('..'), txt(trav));
@@ -151,7 +168,8 @@ try {
   const auditPath = path.join(dirB, 'audit.log');
   const auditRaw = fs.existsSync(auditPath) ? fs.readFileSync(auditPath, 'utf8') : '';
   check('审计日志已写入，包含执行与拦截记录', auditRaw.includes('"outcome":"ok"') && auditRaw.includes('"outcome":"blocked"'), auditRaw.slice(0, 200));
-  check('审计日志权限为 600 且不含密钥', (fs.statSync(auditPath).mode & 0o777) === 0o600 && !auditRaw.includes(KEY));
+  check('审计日志不含密钥', !auditRaw.includes(KEY));
+  if (POSIX) check('审计日志权限为 600', (fs.statSync(auditPath).mode & 0o777) === 0o600);
   check('B 组 stdout 干净（无协议错误）', B.protocolErrors.length === 0, B.protocolErrors.join(' | '));
   allOutputs.push(...B.stderr, auditRaw);
   await B.close();
@@ -165,8 +183,10 @@ try {
 
   // ---------- D. refuse insecure setups ----------
   console.log('\n# D. 不安全配置拒绝启动');
-  expectStartupFailure('密钥文件权限 644', writeCfg(path.join(tmp, 'd1'), mock, {}, { keyMode: 0o644 }), '权限过宽');
-  expectStartupFailure('配置文件权限 644', writeCfg(path.join(tmp, 'd2'), mock, {}, { cfgMode: 0o644 }), '权限过宽');
+  if (POSIX) {
+    expectStartupFailure('密钥文件权限 644', writeCfg(path.join(tmp, 'd1'), mock, {}, { keyMode: 0o644 }), '权限过宽');
+    expectStartupFailure('配置文件权限 644', writeCfg(path.join(tmp, 'd2'), mock, {}, { cfgMode: 0o644 }), '权限过宽');
+  }
   expectStartupFailure('配置里内联 api_key', writeCfg(path.join(tmp, 'd3'), mock, { api_key: KEY }), '不允许直接写 api_key');
   expectStartupFailure('公网地址使用 http', writeCfg(path.join(tmp, 'd4'), mock, { base_url: 'http://panel.example.com' }), '必须使用 https');
   expectStartupFailure('base_url 含账号密码', writeCfg(path.join(tmp, 'd5'), mock, { base_url: 'https://u:p@panel.example.com' }), '账号密码');
